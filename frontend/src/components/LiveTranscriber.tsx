@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
+import { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from "react";
 
 interface LiveTranscriberProps {
   asrSocket: WebSocket | null;
@@ -89,7 +89,37 @@ const LiveTranscriber = forwardRef<LiveTranscriberHandle, LiveTranscriberProps>(
     }
   };
 
-  const startRecording = async () => {
+  const stopRecording = useCallback(() => {
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    onRecordingChange?.(false);
+    pendingStartRef.current = false;
+
+    try {
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    } catch {}
+    mediaStreamRef.current = null;
+
+    try {
+      workletRef.current?.disconnect();
+    } catch {}
+    if (workletRef.current) {
+      workletRef.current.port.onmessage = null;
+      workletRef.current = null;
+    }
+
+    try {
+      audioContextRef.current?.close();
+    } catch {}
+    audioContextRef.current = null;
+    analyserRef.current = null;
+
+    cleanupWaveform();
+    setStatus("Idle");
+    onCloseAsr();
+  }, [onCloseAsr, onRecordingChange]);
+
+  const startRecording = useCallback(async () => {
     const socket = asrSocketRef.current;
     if (!socket) {
       setStatus("Waiting for ASR socket…");
@@ -101,15 +131,11 @@ const LiveTranscriber = forwardRef<LiveTranscriberHandle, LiveTranscriberProps>(
     if (socket.readyState !== WebSocket.OPEN) {
       setStatus("Connecting to ASR…");
       pendingStartRef.current = true;
-      const handleOpen = () => {
-        socket.removeEventListener("open", handleOpen);
-        pendingStartRef.current = false;
-        startRecording();
-      };
-      socket.addEventListener("open", handleOpen, { once: true });
       onRestartAsr();
       return;
     }
+
+    pendingStartRef.current = false;
 
     try {
       setStatus("Requesting microphone…");
@@ -162,37 +188,7 @@ const LiveTranscriber = forwardRef<LiveTranscriberHandle, LiveTranscriberProps>(
       setStatus("Microphone permission denied");
       stopRecording();
     }
-  };
-
-  const stopRecording = () => {
-    isRecordingRef.current = false;
-    setIsRecording(false);
-    onRecordingChange?.(false);
-    pendingStartRef.current = false;
-
-    try {
-      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-    } catch {}
-    mediaStreamRef.current = null;
-
-    try {
-      workletRef.current?.disconnect();
-    } catch {}
-    if (workletRef.current) {
-      workletRef.current.port.onmessage = null;
-      workletRef.current = null;
-    }
-
-    try {
-      audioContextRef.current?.close();
-    } catch {}
-    audioContextRef.current = null;
-    analyserRef.current = null;
-
-    cleanupWaveform();
-    setStatus("Idle");
-    onCloseAsr();
-  };
+  }, [onRestartAsr, onRecordingChange, stopRecording]);
 
   const toggleRecording = () => {
     if (isRecordingRef.current) {
@@ -204,11 +200,32 @@ const LiveTranscriber = forwardRef<LiveTranscriberHandle, LiveTranscriberProps>(
 
   useEffect(() => {
     asrSocketRef.current = asrSocket;
-    if (pendingStartRef.current && asrSocket && asrSocket.readyState === WebSocket.OPEN) {
-      pendingStartRef.current = false;
-      startRecording();
+    if (!asrSocket) {
+      return;
     }
-  }, [asrSocket]);
+
+    const handleOpen = () => {
+      if (pendingStartRef.current) {
+        pendingStartRef.current = false;
+        startRecording();
+      }
+    };
+
+    if (pendingStartRef.current) {
+      if (asrSocket.readyState === WebSocket.OPEN) {
+        handleOpen();
+      } else {
+        asrSocket.addEventListener("open", handleOpen, { once: true });
+        return () => {
+          asrSocket.removeEventListener("open", handleOpen);
+        };
+      }
+    }
+
+    return () => {
+      asrSocket.removeEventListener("open", handleOpen);
+    };
+  }, [asrSocket, startRecording]);
 
   useEffect(() => {
     return () => {
@@ -235,19 +252,26 @@ const LiveTranscriber = forwardRef<LiveTranscriberHandle, LiveTranscriberProps>(
             <div className={`w-4 h-4 rounded ${isRecording ? "bg-white" : "bg-gray-300"}`} />
           </button>
           <canvas ref={canvasRef} width={220} height={40} className="bg-gray-800 rounded-lg" />
-          <div className="text-sm text-gray-400 w-32">{status}</div>
+          <div className="flex-1 px-3 py-2 bg-gray-800/60 rounded-lg border border-gray-700/50 min-h-[2.5rem] flex items-center">
+            <span className="sr-only">{status}</span>
+            <span className="text-sm text-gray-300">
+              {interimText || (isRecording ? "Listening…" : "Click record button to start voice chat")}
+            </span>
+          </div>
         </div>
       )}
 
       {!showButton && (
-        <canvas ref={canvasRef} width={220} height={40} className="bg-gray-800 rounded-lg" />
+        <div className="flex items-center gap-3">
+          <canvas ref={canvasRef} width={220} height={40} className="bg-gray-800 rounded-lg" />
+          <div className="flex-1 px-3 py-2 bg-gray-800/60 rounded-lg border border-gray-700/50 min-h-[2.5rem] flex items-center">
+            <span className="sr-only">{status}</span>
+            <span className="text-sm text-gray-300">
+              {interimText || (isRecording ? "Listening…" : "Ready to listen")}
+            </span>
+          </div>
+        </div>
       )}
-
-      <div className="px-3 py-2 bg-gray-800/60 rounded-lg border border-gray-700/50 min-h-[2.5rem] flex items-center">
-        <span className="text-sm text-gray-300">
-          {interimText || (isRecording ? "Listening…" : "Ready to listen")}
-        </span>
-      </div>
     </div>
   );
 });

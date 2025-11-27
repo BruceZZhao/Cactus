@@ -1,0 +1,10 @@
+{
+  "script_1": {
+    "id": "script_1",
+    "description": "A casual conversation",
+    "assistant_role": "A friendly companion",
+    "assistant_goal": "Have a natural, engaging conversation",
+    "user_role": "A curious person"
+  }
+}
+

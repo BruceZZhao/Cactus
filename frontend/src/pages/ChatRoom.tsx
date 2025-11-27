@@ -13,11 +13,12 @@ const ChatRoom: React.FC = () => {
   const [input, setInput] = useState("");
   const [chatLog, setChatLog] = useState<ChatMessage[]>([]);
   const [interimText, setInterimText] = useState("");
-  const [currentAgentResponse, setCurrentAgentResponse] = useState("");
-  const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
+  const [activeAgentIndex, setActiveAgentIndex] = useState<number | null>(null);
   const [asrSocket, setAsrSocket] = useState<WebSocket | null>(null);
   const asrSocketRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingAgentRef = useRef<number | null>(null);
+  const lastAgentTextRef = useRef("");
 
   useEffect(() => {
     const createSession = async () => {
@@ -34,18 +35,48 @@ const ChatRoom: React.FC = () => {
   }, []);
 
   const handleAgentText = useCallback((text: string) => {
-    setCurrentAgentResponse(text);
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (pendingAgentRef.current === null && lastAgentTextRef.current === trimmed) {
+      return;
+    }
+    setChatLog((prev) => {
+      const updated = [...prev];
+      if (pendingAgentRef.current === null) {
+        pendingAgentRef.current = updated.length;
+        setActiveAgentIndex(updated.length);
+        return [...updated, { sender: "Agent", text: trimmed }];
+      }
+      updated[pendingAgentRef.current] = { sender: "Agent", text: trimmed };
+      return updated;
+    });
   }, []);
 
-  const finalizeAgentResponse = useCallback(
-    (text?: string) => {
-      const finalText = (text || currentAgentResponse).trim();
-      if (!finalText) return;
-      setChatLog((prev) => [...prev, { sender: "Agent", text: finalText }]);
-      setCurrentAgentResponse("");
-    },
-    [currentAgentResponse]
-  );
+  const finalizeAgentResponse = useCallback((text?: string) => {
+    setChatLog((prev) => {
+      const updated = [...prev];
+      if (pendingAgentRef.current === null) {
+        const finalText = text?.trim();
+        if (finalText) {
+          if (lastAgentTextRef.current === finalText) {
+            return updated;
+          }
+          lastAgentTextRef.current = finalText;
+          return [...updated, { sender: "Agent", text: finalText }];
+        }
+        return updated;
+      }
+      if (text?.trim()) {
+        updated[pendingAgentRef.current] = { sender: "Agent", text: text.trim() };
+        lastAgentTextRef.current = text.trim();
+      } else {
+        lastAgentTextRef.current = updated[pendingAgentRef.current].text;
+      }
+      pendingAgentRef.current = null;
+      setActiveAgentIndex(null);
+      return updated;
+    });
+  }, []);
 
   const sendText = async () => {
     const message = input.trim();
@@ -73,15 +104,9 @@ const ChatRoom: React.FC = () => {
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatLog, currentAgentResponse]);
+  }, [chatLog]);
 
-  useEffect(() => {
-    if (!sessionId) return;
-
-    const socket = new WebSocket(`${WS_BASE}/audio-in/${sessionId}`);
-    asrSocketRef.current = socket;
-    setAsrSocket(socket);
-
+  const setupAsrSocket = useCallback((socket: WebSocket) => {
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -98,7 +123,6 @@ const ChatRoom: React.FC = () => {
         console.warn("Failed to parse ASR message:", err);
       }
     };
-
     socket.onerror = (e) => console.error("ASR socket error", e);
     socket.onclose = () => {
       if (asrSocketRef.current === socket) {
@@ -106,11 +130,20 @@ const ChatRoom: React.FC = () => {
         setAsrSocket(null);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const socket = new WebSocket(`${WS_BASE}/audio-in/${sessionId}`);
+    setupAsrSocket(socket);
+    asrSocketRef.current = socket;
+    setAsrSocket(socket);
 
     return () => {
       socket.close();
     };
-  }, [sessionId, WS_BASE]);
+  }, [sessionId, WS_BASE, setupAsrSocket]);
 
   const restartAsrConnection = useCallback(() => {
     if (asrSocketRef.current) {
@@ -122,9 +155,10 @@ const ChatRoom: React.FC = () => {
     }
     if (!sessionId) return;
     const socket = new WebSocket(`${WS_BASE}/audio-in/${sessionId}`);
+    setupAsrSocket(socket);
     asrSocketRef.current = socket;
     setAsrSocket(socket);
-  }, [sessionId, WS_BASE]);
+  }, [sessionId, WS_BASE, setupAsrSocket]);
 
   const closeAsrConnection = useCallback(() => {
     if (asrSocketRef.current) {
@@ -170,29 +204,18 @@ const ChatRoom: React.FC = () => {
               >
                 <div className="text-xs uppercase tracking-wide mb-1 opacity-70">
                   {entry.sender}
-                </div>
-                <div className="text-sm whitespace-pre-wrap break-words">{entry.text}</div>
-              </div>
-            </div>
-          ))}
-
-          {currentAgentResponse && (
-            <div className="flex justify-start">
-              <div className="bg-gray-800 text-gray-100 px-4 py-3 rounded-2xl rounded-bl-sm max-w-[70%]">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide mb-1 opacity-70">
-                  Agent
-                  {isAgentSpeaking && (
-                    <span className="flex gap-1">
+                  {entry.sender === "Agent" && activeAgentIndex === index && (
+                    <span className="ml-2 flex gap-1">
                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse delay-150" />
                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse delay-300" />
                     </span>
                   )}
                 </div>
-                <div className="text-sm whitespace-pre-wrap break-words">{currentAgentResponse}</div>
+                <div className="text-sm whitespace-pre-wrap break-words">{entry.text}</div>
               </div>
             </div>
-          )}
+          ))}
 
           {interimText && (
             <div className="flex justify-end">
@@ -207,20 +230,25 @@ const ChatRoom: React.FC = () => {
 
         <footer className="px-6 py-4 border-t border-gray-800 space-y-3 bg-gray-900/40">
           <div className="flex space-x-3">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendText()}
-              placeholder="Type your message..."
-              className="flex-1 px-4 py-3 rounded-xl bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={sendText}
-              disabled={!input.trim()}
-              className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50"
-            >
-              Send
-            </button>
+            <div className="flex-1 relative">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendText()}
+                placeholder="Type your message or use the recording button below..."
+                className="w-full px-4 py-3 pr-12 rounded-xl bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={sendText}
+                disabled={!input.trim()}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50"
+                title="Send"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M2.293 15.707a1 1 0 001.414 0l9-9V15a1 1 0 102 0V4a1 1 0 00-1-1H3a1 1 0 100 2h7.586l-9 9a1 1 0 000 1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <LiveTranscriber
@@ -236,8 +264,8 @@ const ChatRoom: React.FC = () => {
         sessionId={sessionId}
         onAgentText={handleAgentText}
         onResponseComplete={finalizeAgentResponse}
-        onAudioStart={() => setIsAgentSpeaking(true)}
-        onAudioEnd={() => setIsAgentSpeaking(false)}
+        onAudioStart={() => {}}
+        onAudioEnd={() => {}}
       />
     </div>
   );
