@@ -1,8 +1,15 @@
-# Cactus Voice Chat
+# Project Cactus - a super-fast voice system
 
 Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Text, Gemini, Google Text-to-Speech) with a Vite/React frontend. You can drive the stack either from the browser UI or from the included `quick_launch/simple_reply.py` microphone client.
 
+## Repository layout
+
+- `backend/` – FastAPI server, ASR/LLM/TTS orchestration, session handling.
+- `frontend/` – Vite + React UI with waveform input, chat log, and streaming audio player.
+- `quick_launch/` – CLI helper scripts (`simple_reply.py`) for testing the full audio loop without the browser.
+
 ---
+
 
 ## Requirements
 
@@ -11,14 +18,6 @@ Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Tex
 - **Google Cloud** – Speech-to-Text + Text-to-Speech enabled, service-account JSON.
 - **Google Gemini API key** – Gemini 2.x model with streaming access (`Google_LLM_API` / `GOOGLE_LLM_API_KEY`).
 
----
-
-## Repository layout
-
-- `backend/` – FastAPI server, ASR/LLM/TTS orchestration, session handling.
-- `frontend/` – Vite + React UI with waveform input, chat log, and streaming audio player.
-- `quick_launch/` – CLI helper scripts (`simple_reply.py`) for testing the full audio loop without the browser.
-- `key/` – For placing Google Cloud API keys
 ---
 
 ## 1. Backend setup
