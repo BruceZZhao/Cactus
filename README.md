@@ -58,7 +58,7 @@ Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Tex
    The server exposes:
    - `POST /sessions` – create voice session.
    - `WebSocket /ws/audio-in/{session_id}` – microphone/ASR stream.
-   - `WebSocket /ws/audio-out/{session_id}` – TTS audio + metadata stream.
+   - `WebSocket /ws/audio-out/{session_id}` – TTS audio.
    - `POST /respond` – text input fallback.
 
 ---
@@ -76,7 +76,7 @@ HTTP + WebSocket summary:
 - `GET /config` – fetch character/script metadata.
 - `GET /healthz` – health probe.
 - `WS /ws/audio-in/{session_id}` – stream PCM16 mic audio (10 ms chunks recommended).
-- `WS /ws/audio-out/{session_id}` – receive interleaved TTS audio bytes + metadata JSON.
+- `WS /ws/audio-out/{session_id}` – receive interleaved TTS audio bytes.
 ---
 
 ## 3. Headless testing via `simple_reply.py`
