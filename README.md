@@ -8,8 +8,7 @@ Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Tex
 
 - **Python (3.11 tested)** – backend + quick-launch client.
 - **Node.js (v18 or newer)** – Vite frontend.
-- **npm (v9 or newer)** – comes with Node.
-- **Google Cloud project** – Speech-to-Text + Text-to-Speech enabled, service-account JSON.
+- **Google Cloud** – Speech-to-Text + Text-to-Speech enabled, service-account JSON.
 - **Google Gemini API key** – Gemini 2.x model with streaming access (`Google_LLM_API` / `GOOGLE_LLM_API_KEY`).
 
 ---
