@@ -18,7 +18,7 @@ Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Tex
 - `backend/` – FastAPI server, ASR/LLM/TTS orchestration, session handling.
 - `frontend/` – Vite + React UI with waveform input, chat log, and streaming audio player.
 - `quick_launch/` – CLI helper scripts (`simple_reply.py`) for testing the full audio loop without the browser.
-- `key/` – Optional scratch space; for production/store secrets outside the repo.
+- `key/` – For placing Google Cloud API keys
 ---
 
 ## 1. Backend setup
@@ -78,7 +78,6 @@ HTTP + WebSocket summary:
 - `GET /healthz` – health probe.
 - `WS /ws/audio-in/{session_id}` – stream PCM16 mic audio (10 ms chunks recommended).
 - `WS /ws/audio-out/{session_id}` – receive interleaved TTS audio bytes + metadata JSON.
-
 ---
 
 ## 3. Headless testing via `simple_reply.py`
