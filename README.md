@@ -39,18 +39,15 @@ Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Tex
 
    - **Google Speech-to-Text & Text-to-Speech**  
      Enable both APIs, create a service account, download the JSON key, then set `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/key.json`.
-   - **Google Speech-to-Text streaming API key** (if your project requires it)  
-     Standard Cloud API key; export `GOOGLE_ASR_API_KEY=your-key`.
    - **Google Gemini key**  
      Generate at <https://aistudio.google.com/app/apikey>, export `Google_LLM_API=your-gemini-key` (fallback `GOOGLE_LLM_API_KEY`).
 
-   Suggested file placement (outside the repo so the key never ends up in Git):
+   Suggested file placement:
    ```bash
    mkdir -p ~/.config/cactus
    mv ~/Downloads/your-service-account.json ~/.config/cactus/
    export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/cactus/your-service-account.json"
    ```
-
    Add the exports to your shell profile or a `.env` file that you `source` before running the backend.
 
 4. **Run the FastAPI server**
@@ -122,7 +119,6 @@ Stop the script with `Ctrl+C`.
    ```bash
    npm run dev
    ```
-
    The Vite dev server proxies `/api`, `/sessions`, `/respond`, `/config`, `/ws`, and `/healthz` to `http://127.0.0.1:8000` (configured in `vite.config.ts`). Visit the printed URL (usually `http://localhost:5173`) and allow microphone permissions. The UI will:
    - stream mic audio via the ASR socket,
    - display interim/final transcripts above the chat log,
