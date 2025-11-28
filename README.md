@@ -1,4 +1,4 @@
-# Project Cactus - a super-fast voice system
+# Project Cactus - a super-fast AI voice chat system
 
 Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Text, Gemini, Google Text-to-Speech) with a Vite/React frontend. You can drive the stack either from the browser UI or from the included `quick_launch/simple_reply.py` microphone client.
 
