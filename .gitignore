@@ -72,3 +72,7 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
+# RAG vector database
+backend/rag/qdrant_data/collection/
+backend/rag/qdrant_data/*.sqlite
+backend/rag/qdrant_data/*.db

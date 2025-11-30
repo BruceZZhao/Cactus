@@ -17,6 +17,7 @@ Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Tex
 - **Node.js (v18 or newer)** – Vite frontend.
 - **Google Cloud** – Speech-to-Text + Text-to-Speech enabled, service-account JSON.
 - **Google Gemini API key** – Gemini 2.x model with streaming access (`Google_LLM_API` / `GOOGLE_LLM_API_KEY`).
+- **RAG dependencies (optional)** – `sentence-transformers` and `qdrant-client` for RAG functionality (included in `requirements.txt`).
 
 ---
 
@@ -40,6 +41,8 @@ Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Tex
      Enable both APIs, create a service account, download the JSON key, then set `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/key.json`.
    - **Google Gemini key**  
      Generate at <https://aistudio.google.com/app/apikey>, export `Google_LLM_API=your-gemini-key` (fallback `GOOGLE_LLM_API_KEY`).
+   - **RAG (optional)**  
+     To enable RAG (Retrieval-Augmented Generation) for character profiles, set `CLEAN_RAG_ENABLED=true` in your `.env` file. RAG allows the system to retrieve relevant character background information from a vector database to enhance responses.
 
    Suggested file placement:
    ```bash
@@ -57,6 +60,9 @@ Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Tex
 
    The server exposes:
    - `POST /sessions` – create voice session.
+   - `POST /sessions/{session_id}/settings` – configure session settings (rag_mode, character, script, language).
+   - `POST /set-character` – set character for a session.
+   - `POST /set-script` – set script for a session.
    - `WebSocket /ws/audio-in/{session_id}` – microphone/ASR stream.
    - `WebSocket /ws/audio-out/{session_id}` – TTS audio.
    - `POST /respond` – text input fallback.
@@ -66,17 +72,39 @@ Voice-forward chat experience that pairs a FastAPI backend (Google Speech-to-Tex
 ## 2. Backend capabilities & APIs
 - Real-time ASR via WebSocket streaming (Google Speech-to-Text) with configurable sample rate, language, and frame size (`backend/config.py`).
 - Gemini-powered response generation with conversation/session state, token guard, and optional thinker model.
+- **RAG (Retrieval-Augmented Generation)** – Character profile retrieval from vector database to enhance responses with relevant background information.
+- **Thinker Agent** – Background agent that summarizes conversation history and suggests next topics when conversation length exceeds threshold (6 messages).
 - Sentence-buffered streaming TTS output (Google Text-to-Speech) with per-sentence metadata, ordered queuing, and audio trimming hooks.
 - Session orchestration helpers in `backend/runtime/` (bus, queues, session store) and `backend/service/` (ASR, LLM, TTS, orchestrator).
 
 HTTP + WebSocket summary:
 - `POST /sessions` – create a new conversation session.
+- `POST /sessions/{session_id}/settings` – configure session settings (rag_mode, character, script, language).
+- `POST /set-character` – set character for a session.
+- `POST /set-script` – set script for a session.
 - `DELETE /sessions/{session_id}` – close a session.
 - `POST /respond` – send text directly to the LLM.
 - `GET /config` – fetch character/script metadata.
 - `GET /healthz` – health probe.
 - `WS /ws/audio-in/{session_id}` – stream PCM16 mic audio (10 ms chunks recommended).
 - `WS /ws/audio-out/{session_id}` – receive interleaved TTS audio bytes.
+
+### RAG Setup
+
+To build the vector database for character profiles:
+
+1. Place character profile files in `backend/rag/profiles/` (e.g., `profile_anne`, `profile_adam`, `profile_william`).
+2. Run the encoding script:
+   ```bash
+   python backend/rag/encode_with_chunk_and_para.py
+   ```
+3. The script will create Qdrant collections in `backend/rag/qdrant_data/` for each profile.
+4. Enable RAG by setting `CLEAN_RAG_ENABLED=true` in your `.env` file.
+
+Character-to-collection mapping is defined in `backend/prompt.py`:
+- `model_5` → `profile_adam`
+- `model_6` → `profile_william`
+- `model_7` → `profile_anne`
 ---
 
 ## 3. Headless testing via `simple_reply.py`
@@ -141,6 +169,8 @@ Stop the script with `Ctrl+C`.
 - **`uvicorn: command not found`** – virtualenv not activated or dependencies not installed. Use `source venv/bin/activate && pip install -r backend/requirements.txt`.
 - **Frontend can’t reach backend** – confirm backend runs on `127.0.0.1:8000`; Vite proxy relies on that host/port.
 - **No audio output / permission issues** – verify browser or terminal has mic/audio permissions and that your Google API keys are valid (watch backend logs for quota/auth errors).
+- **RAG not working** – ensure `CLEAN_RAG_ENABLED=true` is set in `.env` and the vector database has been built using `backend/rag/encode_with_chunk_and_para.py`.
+- **Google Cloud credentials not found** – set `GOOGLE_APPLICATION_CREDENTIALS` (absolute path) or `Google_CLOUD_KEY` (relative path from project root) in your `.env` file. The backend will log warnings if credentials are missing.
 
 ---
 
