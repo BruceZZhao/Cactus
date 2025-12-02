@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 @dataclass
 class ASRConfig:
-    api_key: str = os.getenv("GOOGLE_ASR_API_KEY", "")
     sample_rate: int = int(os.getenv("CLEAN_ASR_SAMPLE_RATE", "16000"))
     language: str = os.getenv("CLEAN_ASR_LANGUAGE", "en-US")
     frame_ms: int = int(os.getenv("CLEAN_FRAME_MS", "10"))
@@ -16,7 +15,7 @@ class ASRConfig:
 @dataclass
 class LLMConfig:
     api_key: str = os.getenv("Google_LLM_API", "") or os.getenv("GOOGLE_LLM_API_KEY", "")
-    model: str = os.getenv("CLEAN_LLM_MODEL", "models/gemini-2.5-flash")
+    model: str = os.getenv("CLEAN_LLM_MODEL", "models/gemini-2.5-flash-lite")
     thinker_model: str = os.getenv("CLEAN_LLM_THINKER_MODEL", "models/gemini-2.5-flash")
     temperature: float = float(os.getenv("CLEAN_LLM_TEMPERATURE", "0.7"))
     max_output_tokens: int = int(os.getenv("CLEAN_LLM_MAX_TOKENS", "500"))
@@ -25,12 +24,13 @@ class LLMConfig:
 @dataclass
 class TTSConfig:
     language_code: str = os.getenv("CLEAN_TTS_LANGUAGE", "en-US")
-    voice: str = os.getenv("CLEAN_TTS_VOICE", "en-US-Neural2-D")
-
+    voice: str = os.getenv("CLEAN_TTS_VOICE", "en-GB-Standard-F")
+# You select voice from https://docs.cloud.google.com/text-to-speech/docs/list-voices-and-types
 
 @dataclass
 class RAGConfig:
-    enabled: bool = os.getenv("CLEAN_RAG_ENABLED", "false").lower() == "true"
+    # Configure RAG here - set to True to enable RAG infrastructure
+    enabled: bool = True  # Change to False to disable RAG
 
 
 @dataclass

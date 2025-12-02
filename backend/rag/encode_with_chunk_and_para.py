@@ -148,7 +148,7 @@ if __name__ == "__main__":
     profile_dir.mkdir(parents=True, exist_ok=True)
     
     jobs = [
-        ("profile_anne", str(profile_dir / "profile_anne")),
+        ("default_profile", str(profile_dir / "default_profile")),
         # Add more profiles as needed
     ]
 

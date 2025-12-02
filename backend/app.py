@@ -22,7 +22,6 @@ logging.basicConfig(level=log_level)
 import time
 
 from backend.config import get_settings
-from backend.data_loader import get_characters, get_scripts
 from backend.runtime.bus import audio_bus
 from backend.runtime.queues import queue_registry
 from backend.runtime.session import session_registry
@@ -69,6 +68,26 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+async def startup_event():
+    """Preload RAG embedding model on startup if RAG is enabled."""
+    settings = get_settings()
+    if settings.rag.enabled:
+        logger.info("RAG enabled - preloading embedding model...")
+        try:
+            # Import and preload the embedding model
+            from backend.prompt import _get_embed_model
+            embed_model = _get_embed_model()
+            if embed_model:
+                logger.info("Embedding model preloaded successfully")
+            else:
+                logger.warning("Failed to preload embedding model")
+        except Exception as e:
+            logger.warning(f"Could not preload embedding model: {e}")
+    else:
+        logger.info("RAG disabled - skipping embedding model preload")
+
+
 @app.get("/healthz")
 async def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
@@ -76,7 +95,12 @@ async def healthcheck() -> dict[str, str]:
 
 @app.get("/config")
 async def get_config() -> dict[str, dict]:
-    return {"characters": get_characters(), "scripts": get_scripts()}
+    """Get default configuration (kept for backward compatibility)."""
+    from backend.data_loader import get_default_character, get_default_script, DEFAULT_CHARACTER_ID, DEFAULT_SCRIPT_ID
+    return {
+        "characters": {DEFAULT_CHARACTER_ID: get_default_character()},
+        "scripts": {DEFAULT_SCRIPT_ID: get_default_script()}
+    }
 
 
 @app.post("/sessions")
@@ -102,7 +126,7 @@ async def delete_session(session_id: str) -> dict[str, str]:
 
 @app.post("/sessions/{session_id}/settings")
 async def set_session_settings(session_id: str, request: Request) -> dict[str, str]:
-    """Set session settings: rag_mode, character, script, language"""
+    """Set session settings: rag_mode, language, custom_prompt"""
     from backend.runtime.session_store import set_session_value
     
     state = await session_registry.get(session_id)
@@ -113,88 +137,14 @@ async def set_session_settings(session_id: str, request: Request) -> dict[str, s
     
     if "rag_mode" in data:
         await set_session_value(session_id, "rag_mode", data["rag_mode"])
-    if "character" in data:
-        await set_session_value(session_id, "character", data["character"])
-    if "script" in data:
-        await set_session_value(session_id, "script", data["script"])
     if "language" in data:
         await set_session_value(session_id, "language", data["language"])
+    if "custom_prompt" in data:
+        await set_session_value(session_id, "custom_prompt", data["custom_prompt"])
     
     return {"status": "updated"}
 
 
-@app.post("/set-character")
-async def set_character(request: Request) -> JSONResponse:
-    """Set character for a session"""
-    try:
-        from backend.runtime.session_store import set_session_value, get_session_value
-        
-        data = await request.json()
-        session_id = data.get("session_id", "")
-        character_name = data.get("name", "")
-        
-        logger.info(f"/set-character called: session_id={session_id}, character_name={character_name}")
-        
-        if not session_id:
-            logger.error("Missing session_id in /set-character request")
-            raise HTTPException(status_code=400, detail="Missing session_id")
-        if not character_name:
-            logger.error("Missing character name in /set-character request")
-            raise HTTPException(status_code=400, detail="Missing character name")
-        
-        state = await session_registry.get(session_id)
-        if not state:
-            logger.error(f"Session not found in /set-character: {session_id}")
-            raise HTTPException(status_code=404, detail="Session not found")
-        
-        await set_session_value(session_id, "character", character_name)
-        logger.info(f"Character for session {session_id} set to: {character_name}")
-        
-        # Verify setting
-        verify_char = await get_session_value(session_id, "character")
-        logger.info(f"Verified character for session {session_id}: {verify_char}")
-        
-        return JSONResponse(content={"success": True, "character": character_name})
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error in /set-character: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-
-@app.post("/set-script")
-async def set_script(request: Request) -> JSONResponse:
-    """Set script for a session"""
-    try:
-        from backend.runtime.session_store import set_session_value
-        
-        data = await request.json()
-        session_id = data.get("session_id", "")
-        script_name = data.get("script", "")
-        
-        logger.info(f"/set-script called: session_id={session_id}, script_name={script_name}")
-        
-        if not session_id:
-            logger.error("Missing session_id in /set-script request")
-            raise HTTPException(status_code=400, detail="Missing session_id")
-        if not script_name:
-            logger.error("Missing script name in /set-script request")
-            raise HTTPException(status_code=400, detail="Missing script name")
-        
-        state = await session_registry.get(session_id)
-        if not state:
-            logger.error(f"Session not found in /set-script: {session_id}")
-            raise HTTPException(status_code=404, detail="Session not found")
-        
-        await set_session_value(session_id, "script", script_name)
-        logger.info(f"Script for session {session_id} set to: {script_name}")
-        
-        return JSONResponse(content={"status": "ok", "script": script_name})
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error in /set-script: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @app.post("/respond")

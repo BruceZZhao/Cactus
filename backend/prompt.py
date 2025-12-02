@@ -89,9 +89,7 @@ def _get_qdrant_client():
 
 
 character_rag_mapping = {
-    "model_5": "profile_adam",
-    "model_6": "profile_william",
-    "model_7": "profile_anne",
+    "model_1": "default_profile",
 }
 
 
@@ -160,6 +158,7 @@ def generate_general_prompt(
     script: Dict[str, Any],
     language: str,
     rag_enabled: bool = False,
+    custom_prompt: str = "",
 ) -> str:
     lang = (language or "ENG").upper()
     language_directive = "Chinese." if lang == "CHN" else "English."
@@ -195,8 +194,42 @@ def generate_general_prompt(
     - Other special formatting characters
     Write only plain, readable text that can be spoken naturally. Use commas, periods, and question marks for punctuation only.
     """
+    print("RAG RESULTS",relevant_info)
 
-    full_prompt = f"""
+    # Apply custom prompt customization if provided
+    if custom_prompt.strip():
+        # Custom prompt can override or append to the base prompt
+        # If it starts with "OVERRIDE:", replace the entire prompt structure
+        if custom_prompt.strip().startswith("OVERRIDE:"):
+            custom_content = custom_prompt.strip()[9:].strip()
+            full_prompt = f"""{custom_content}
+
+    User's Message: {message}
+    Assistant_Response:"""
+        else:
+            # Otherwise, append custom instructions to the base prompt
+            full_prompt = f"""
+    Conversation Setting for User: {description}
+    Assistant(You)'s Identity: {identity}
+    Assistant(You)'s Role: {assistant_role}
+    Assistant(You)'s Goal: {assistant_goal}
+    Assistant(You)'s Background: {relevant_info}
+    Recent Conversations: {conversation_log}
+    Past Key Info: {current_history}
+    Suggested Topic: {topic}
+    User's Role: {user_role}
+    User's Message: {message}
+    Use_Mode: {use_mode}
+
+    IMPORTANT: You must respond in {language_directive} only.
+
+    Custom Instructions: {custom_prompt}
+
+    Instructions: {instructions}
+    Assistant_Response:"""
+    else:
+        # Standard prompt without customization
+        full_prompt = f"""
     Conversation Setting for User: {description}
     Assistant(You)'s Identity: {identity}
     Assistant(You)'s Role: {assistant_role}

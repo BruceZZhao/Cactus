@@ -19,10 +19,8 @@ const ChatRoom: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pendingAgentRef = useRef<number | null>(null);
   const lastAgentTextRef = useRef("");
-  const [selectedCharacter, setSelectedCharacter] = useState<string>("model_7");
-  const [selectedScript, setSelectedScript] = useState<string>("script_1");
 
-  // Create session and set character/script
+  // Create session and set default settings
   useEffect(() => {
     const createSession = async () => {
       try {
@@ -32,7 +30,7 @@ const ChatRoom: React.FC = () => {
         const newSessionId = data.session_id;
         setSessionId(newSessionId);
         
-        // Enable RAG mode
+        // Enable RAG mode and set language
         try {
           await fetch(`${API_BASE}/sessions/${newSessionId}/settings`, {
             method: "POST",
@@ -43,30 +41,7 @@ const ChatRoom: React.FC = () => {
             }),
           });
         } catch (err) {
-          console.warn("Failed to set RAG mode:", err);
-        }
-        
-        // Set character
-        try {
-          const characterToSet = selectedCharacter || "model_7";
-          await fetch(`${API_BASE}/set-character`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: characterToSet, session_id: newSessionId }),
-          });
-        } catch (err) {
-          console.error("Failed to set character:", err);
-        }
-        
-        // Set script
-        try {
-          await fetch(`${API_BASE}/set-script`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ script: selectedScript, session_id: newSessionId }),
-          });
-        } catch (err) {
-          console.error("Failed to set script:", err);
+          console.warn("Failed to set session settings:", err);
         }
       } catch (err) {
         console.error("Session creation failed:", err);
@@ -74,44 +49,6 @@ const ChatRoom: React.FC = () => {
     };
     createSession();
   }, []);
-
-  // Update character when selectedCharacter changes
-  useEffect(() => {
-    if (!sessionId || !selectedCharacter) return;
-    
-    const updateCharacter = async () => {
-      try {
-        await fetch(`${API_BASE}/set-character`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: selectedCharacter, session_id: sessionId }),
-        });
-      } catch (err) {
-        console.error("Failed to update character:", err);
-      }
-    };
-    
-    updateCharacter();
-  }, [selectedCharacter, sessionId]);
-
-  // Update script when selectedScript changes
-  useEffect(() => {
-    if (!sessionId || !selectedScript) return;
-    
-    const updateScript = async () => {
-      try {
-        await fetch(`${API_BASE}/set-script`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ script: selectedScript, session_id: sessionId }),
-        });
-      } catch (err) {
-        console.error("Failed to update script:", err);
-      }
-    };
-    
-    updateScript();
-  }, [selectedScript, sessionId]);
 
   const handleAgentText = useCallback((text: string) => {
     const trimmed = text.trim();

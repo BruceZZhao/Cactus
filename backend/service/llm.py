@@ -29,8 +29,7 @@ from pathlib import Path
 _project_root = Path(__file__).resolve().parent.parent.parent
 load_dotenv(_project_root / ".env")
 genai.configure(api_key=os.getenv("Google_LLM_API"))
-LLM_MODEL_NAME = os.getenv("CLEAN_LLM_MODEL", "models/gemini-2.5-flash-lite")
-LLM_THINKER_MODEL_NAME = os.getenv("CLEAN_LLM_THINKER_MODEL", "models/gemini-2.5-flash")
+# Model names are now read from config.py via get_settings().llm
 
 logger = logging.getLogger(__name__)
 SENTENCE_RE = re.compile(r"(.+?[。．\.！？!?…])(\s*.*)")
@@ -38,20 +37,21 @@ MAX_SENT_BYTES = 800
 
 
 async def _gemini_stream(prompt: str) -> AsyncIterator[str]:
-    model = genai.GenerativeModel(LLM_MODEL_NAME)
+    settings = get_settings().llm
+    model = genai.GenerativeModel(settings.model)
 
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[str | None] = asyncio.Queue()
 
     def _producer() -> None:
         try:
-            settings = get_settings().llm
+            llm_settings = get_settings().llm
             stream = model.generate_content(
                 prompt,
                 stream=True,
                 generation_config={
-                    "temperature": settings.temperature,
-                    "max_output_tokens": settings.max_output_tokens,
+                    "temperature": llm_settings.temperature,
+                    "max_output_tokens": llm_settings.max_output_tokens,
                 },
             )
             for chunk in stream:
@@ -82,14 +82,16 @@ async def llm_worker(session_id: str) -> None:
             continue
 
         language = (await get_session_value(session_id, "language") or "ENG").upper()
-        character_id = await get_session_value(session_id, "character") or "model_5"
-        script_id = await get_session_value(session_id, "script") or "script_1"
-        from backend.data_loader import get_characters, get_scripts
+        from backend.data_loader import get_default_character, get_default_script, DEFAULT_CHARACTER_ID
 
-        all_characters = get_characters()
-        all_scripts = get_scripts()
-        character = all_characters.get(str(character_id), {"name": "Companion", "identity": ""})
-        script = all_scripts.get(str(script_id), {"description": "", "assistant_role": "", "assistant_goal": "", "user_role": ""})
+        # Always use default character and script
+        character = get_default_character()
+        script = get_default_script()
+        character_id = DEFAULT_CHARACTER_ID
+        
+        # Support custom prompt customization
+        custom_prompt = await get_session_value(session_id, "custom_prompt") or ""
+        
         rag_enabled = await get_session_value(session_id, "rag_mode")
         rag_enabled = bool(rag_enabled) if isinstance(rag_enabled, bool) else str(rag_enabled or "").lower() == "true"
         logger.info(f"RAG enabled for session {session_id}: {rag_enabled}, character: {character_id}")
@@ -110,6 +112,7 @@ async def llm_worker(session_id: str) -> None:
                 script=script,
                 language=language,
                 rag_enabled=rag_enabled,
+                custom_prompt=custom_prompt,
             )
         except Exception as exc:
             logger.warning("Prompt generation failed: %s, using fallback", exc)
@@ -236,7 +239,8 @@ async def call_thinker_llm(character_history: str, new_logs: list) -> dict:
     """Call thinker LLM to generate character history summary and next topic."""
     logger.info(f"[Thinker] Calling LLM with history length: {len(character_history)}, new logs: {len(new_logs)}")
     summary_prompt = generate_thinker_prompt(character_history, new_logs)
-    model = genai.GenerativeModel(LLM_THINKER_MODEL_NAME)
+    settings = get_settings().llm
+    model = genai.GenerativeModel(settings.thinker_model)
 
     try:
         logger.info("[Thinker] Sending request to Gemini for summary and next topic...")
